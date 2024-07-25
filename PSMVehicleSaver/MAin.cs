@@ -1,4 +1,4 @@
-﻿using Rocket.Core.Logging;
+using Rocket.Core.Logging;
 using Rocket.Core.Plugins;
 using Rocket.Unturned;
 using Rocket.Unturned.Events;
@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
@@ -30,25 +31,23 @@ namespace PSMVehicleSaver
         public void OnPlayerConnect(UnturnedPlayer player)
         {
 
-            foreach (var veh in Configuration.Instance.SavedVehicles.ToList()) // Iteracja po kopii listy
+            foreach (var veh in Configuration.Instance.SavedVehicles.ToList()) 
             {
                 if (veh.Owner == player.CSteamID || (veh.Group == player.SteamGroupID && Configuration.Instance.CanGroupMemberTakeVehicle))
                 {
-                    RestoreVehicle(veh);
+                    var vehinfo = VehicleManager.findVehicleByNetInstanceID(veh.InstanceID);
+                    if (vehinfo != null)
+                    {
+                        vehinfo.transform.SetPositionAndRotation(veh.Position, veh.Rotation);
+                        Thread.Sleep(100);
+                        vehinfo.transform.SetPositionAndRotation(veh.Position, veh.Rotation);
+                        Configuration.Instance.SavedVehicles.Remove(veh);
+                        Configuration.Save();
+                    }
                 }
             }
         }
 
-        private void RestoreVehicle(SavedVehicle veh)
-        {
-            var vehinfo = VehicleManager.findVehicleByNetInstanceID(veh.InstanceID);
-            if (vehinfo != null)
-            {
-                vehinfo.transform.SetPositionAndRotation(veh.Position, veh.Rotation);
-                Configuration.Instance.SavedVehicles.Remove(veh);
-                Configuration.Save();
-            }
-        }
 
         public void OnPlayerDisconnect(UnturnedPlayer player)
         {
@@ -57,9 +56,12 @@ namespace PSMVehicleSaver
                 if (vehicle.isLocked)
                 {
                     if (Configuration.Instance.zakazanepojazdy.Contains(vehicle.id)) continue;
+
                     bool wasOwner = vehicle.lockedOwner == player.CSteamID;
                     bool wasGroupMember = vehicle.lockedGroup == player.SteamGroupID;
+
                     if (!wasOwner && !wasGroupMember) continue;
+
                     bool areGroupMembersPresent = false;
                     if (vehicle.lockedGroup != CSteamID.Nil)
                     {
@@ -73,7 +75,8 @@ namespace PSMVehicleSaver
                             }
                         }
                     }
-                    if (wasOwner && !areGroupMembersPresent)
+
+                    if ((wasOwner && !areGroupMembersPresent) || (wasGroupMember && !areGroupMembersPresent))
                     {
                         vehicle.forceRemoveAllPlayers();
                         Configuration.Instance.SavedVehicles.Add(new SavedVehicle
@@ -84,7 +87,7 @@ namespace PSMVehicleSaver
                             Owner = player.CSteamID,
                             Rotation = vehicle.transform.rotation
                         });
-                        vehicle.transform.SetPositionAndRotation(new Vector3(300000f, 100f, 300000f), new Quaternion(0f, 0f, 0f, 0f));
+                        vehicle.transform.SetPositionAndRotation(new Vector3(30000f, 100f, 30000f), new Quaternion(0f, 0f, 0f, 0f));
                         Configuration.Save();
                     }
                 }
